@@ -148,7 +148,12 @@ def scrape_all_pages(driver, search_query):
     # Start at the first page
     target_url = f"https://www.daraz.lk/catalog/?q={formatted_query}"
     driver.get(target_url)
-    spinner_sleep(8, "Letting the page settle...")
+    print("Waiting for page to load products...")
+    try:
+        driver.wait_for_element("div[data-qa-locator='product-item']", timeout=15)
+        print("Products loaded.")
+    except Exception:
+        print("Warning: Timed out waiting for product items to appear. The page might be empty or slow.")
 
     if "403 Forbidden" in driver.get_page_source() or "captcha" in driver.current_url.lower():
         print("Security challenge screen encountered.")
@@ -214,8 +219,13 @@ def scrape_all_pages(driver, search_query):
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
                 time.sleep(1)
                 next_button.click()
+                print("Navigating to the next page...")
+                try:
+                    # Wait for the old "next" button to become stale, indicating a page change
+                    driver.wait_for_staleness_of(next_button, timeout=15)
+                except Exception:
+                    print("Warning: Timed out waiting for page transition. Proceeding anyway.")
                 current_page += 1
-                spinner_sleep(6, "Navigating to the next page...")
             except Exception:
                 print("Could not find 'Next Page' button. Assuming end of search results.")
                 break

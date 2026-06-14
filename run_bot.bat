@@ -12,8 +12,8 @@ echo.
 REM Navigate to the script's directory, so it can be run from anywhere
 cd /d "%~dp0"
 
-echo [+] Installing/Verifying required libraries (pandas, seleniumbase)...
-pip install pandas seleniumbase > nul 2>&1
+echo [+] Installing/Verifying required libraries from requirements.txt...
+pip install -r requirements.txt > nul 2>&1
 
 echo [+] Libraries are up to date. Launching the Daraz Bot...
 echo.

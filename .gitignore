@@ -1,0 +1,10 @@
+# Python cache files
+__pycache__/
+*.pyc
+
+# Generated reports and logs
+*.html
+*.csv
+
+# VSCode specific
+.vscode/

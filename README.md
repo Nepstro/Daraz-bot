@@ -19,7 +19,7 @@ This Python script is a powerful tool designed to scan Daraz.lk for significant 
 
 The script generates a clean, detailed HTML report for each search, highlighting the best deals found. New priority alerts are listed at the top, with a full index of all scanned products below.
 
-!Sample HTML Report
+![Daraz Bot Screenshot](./main/screenshots/Screenshot.png)
 
 ---
 

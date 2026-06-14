@@ -1,7 +1,7 @@
 # Daraz Deep Search Price Anomaly Bot
 
 This Python script is a powerful tool designed to scan Daraz.lk for significant price drops and potential pricing errors. It automates the process of crawling multiple pages of search results, analyzing market prices, and flagging items that are listed significantly below the calculated median price for that product category.
-
+![Daraz Bot Screenshot](./main/screenshots/Screenshot.png)
 ## 🚀 Features
 
 -   **Deep Catalog Crawling**: Scans multiple pages of search results for a given product query.
@@ -14,12 +14,6 @@ This Python script is a powerful tool designed to scan Daraz.lk for significant 
 -   **Persistent Alert Logging**: Remembers previously found deals in a `triggered_glitches_log.csv` to only notify you of *new* discoveries.
 -   **Rich HTML Reports**: Generates a detailed, easy-to-read HTML report for each search, highlighting new deals and providing a full index of all products found.
 -   **Automated Browser Handling**: Uses `seleniumbase` to manage the browser, including minimizing the window on startup to keep your terminal visible.
-
-## 📊 Sample Report
-
-The script generates a clean, detailed HTML report for each search, highlighting the best deals found. New priority alerts are listed at the top, with a full index of all scanned products below.
-
-![Daraz Bot Screenshot](./main/screenshots/Screenshot.png)
 
 ---
 

@@ -1,27 +1,26 @@
 @echo off
-title Daraz Bot Launcher
+echo ==================================================
+echo  Daraz Bot by Nepstro - Setup & Launch
+echo ==================================================
 
-echo ======================================================
-echo  Daraz Bot Launcher
-echo ======================================================
+REM Check if pip is installed
+pip --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] pip is not found. Please ensure Python is installed and added to your PATH.
+    pause
+    exit /b 1
+)
+
 echo.
-echo This script will automatically install the required
-echo Python libraries and then start the bot.
-echo.
+echo [+] Checking for required Python libraries...
+pip install -r requirements.txt >nul 2>&1
 
-REM Navigate to the script's directory, so it can be run from anywhere
-cd /d "%~dp0"
-
-echo [+] Installing/Verifying required libraries from requirements.txt...
-pip install -r requirements.txt > nul 2>&1
-
-echo [+] Libraries are up to date. Launching the Daraz Bot...
+echo [+] Libraries are up to date.
+echo [+] Launching the bot...
 echo.
 
 python Daraz_Bot_by_Nepstro.py
 
 echo.
-echo ======================================================
-echo  The bot has finished or been closed. Press any key to exit.
-echo ======================================================
-pause
+echo Bot has finished execution. Press any key to close this window.
+pause >nul

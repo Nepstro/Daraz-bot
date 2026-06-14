@@ -1,10 +1,22 @@
-# Python cache files
+# Python artifacts
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
 
-# Generated reports and logs
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Generated files
 *.html
 *.csv
 
-# VSCode specific
+# IDE / Editor specific
 .vscode/
+.idea/

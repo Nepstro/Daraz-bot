@@ -15,42 +15,49 @@ This Python script is a powerful tool designed to scan Daraz.lk for significant 
 -   **Rich HTML Reports**: Generates a detailed, easy-to-read HTML report for each search, highlighting new deals and providing a full index of all products found.
 -   **Automated Browser Handling**: Uses `seleniumbase` to manage the browser, including minimizing the window on startup to keep your terminal visible.
 
+---
+
 ## 🛠️ How to Use
 
-### 1. Prerequisites
+This bot is designed to be run on your local computer.
+
+### Prerequisites
 
 -   Python 3.x installed.
 -   Google Chrome browser installed.
 
-### 2. Setup
-
-1.  **Clone the repository or download the files.**
-2.  **Navigate to the project directory** in your terminal:
-    ```bash
-    cd "c:\Users\Zoohunter\Desktop\Daraz bot"
-    ```
-3.  **Install the required Python libraries**:
-    ```bash
-    pip install pandas seleniumbase
-    ```
-
-### 3. Running the Bot
+### Setup and Launch
 
 **Easy Method (Recommended):**
 
-Simply double-click the `run_bot.bat` file in the project folder. A terminal will open, automatically handle the setup, and launch the application.
+1.  Download the project files. You can do this by clicking the green `<> Code` button on the GitHub page and selecting **"Download ZIP"**.
+2.  Unzip the folder to a location on your computer.
+3.  Simply double-click the `run_bot.bat` file. A terminal will open, automatically install the required libraries, and launch the application.
 
-**Manual Method (For developers):**
+**Manual Launch (for developers):**
 
-1.  Open a terminal or command prompt in the project folder.
-2.  Run the script directly: `python Daraz_Bot_by_Nepstro.py`
-3.  **Follow the on-screen prompts:**
-    -   **Enter target product**: Type the name of the product you want to search for (e.g., `air fryer`, `samsung s24 ultra`).
-    -   **Enter minimum base price**: Set a price floor to ignore cheap accessories. For example, if you're looking for a phone, you might set this to `10000` to ignore cases and screen protectors.
-    -   **Enter price drop trigger**: The percentage drop from the median price that should trigger an alert (e.g., `50` for 50%).
-    -   **Enter keywords to EXCLUDE**: Comma-separated words to filter out unwanted items (e.g., `case,cover,paper,pot`).
+This method is for users who are comfortable with the command line and Git.
 
-The script will then launch a browser, perform the search, and generate an HTML report which will open automatically. New, critical alerts will be printed directly to your terminal.
+1.  **Clone the Repository:** Open your terminal and run the following command to download the project files.
+    ```bash
+    git clone https://github.com/Nepstro/Daraz-bot.git
+    ```
+
+2.  **Navigate into the Directory:**
+    ```bash
+    cd Daraz-bot
+    ```
+3.  **Install Required Libraries:**
+    ```bash
+    pip install pandas seleniumbase
+    ```
+4.  **Run the Script:**
+    ```bash
+    python Daraz_Bot_by_Nepstro.py
+    ```
+5.  Follow the interactive prompts in the terminal to start your search.
+
+---
 
 ## ⚠️ Disclaimer
 

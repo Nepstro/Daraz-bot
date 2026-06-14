@@ -425,8 +425,7 @@ def generate_report(df_to_report, current_anomalies, median_price, config):
             </div>
             <footer>
                 <p style="text-align:center; font-size:0.9em; color:#6c757d;">
-                    &copy; {time.strftime('%Y')} DARAZ Bot by Zoohunter | 
-                    <a href="https://github.com/Nepstro" target="_blank">GitHub</a>
+                    &copy; {time.strftime('%Y')} DARAZ Bot by <a href="https://github.com/Nepstro" target="_blank">Nepstro</a>
                 </p>
             </footer>
     </body>

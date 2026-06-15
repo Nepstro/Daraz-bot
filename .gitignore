@@ -20,3 +20,4 @@ env/
 # IDE / Editor specific
 .vscode/
 .idea/
+triggered_glitches_log.csv

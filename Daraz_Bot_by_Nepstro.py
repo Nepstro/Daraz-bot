@@ -3,12 +3,11 @@ import time
 import pandas as pd
 from seleniumbase import Driver
 import sys
-from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException, TimeoutException, StaleElementReferenceException
+from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException
 import webbrowser
 import re
 from io import StringIO
 import random
-from selenium.webdriver.support.ui import WebDriverWait
 
 # --- Static Global Settings ---
 MAX_PAGES_TO_CRAWL = 4
@@ -164,51 +163,26 @@ def scrape_all_pages(driver, search_query):
     while current_page <= MAX_PAGES_TO_CRAWL:
         print(f"\n--- Processing Catalog Page {current_page} of {MAX_PAGES_TO_CRAWL} ---")
         
-        # To prevent stale elements, we get the count of items and loop by index,
-        # re-fetching the item list in each iteration.
-        items_on_page = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
-        num_items = len(items_on_page)
-        if not num_items:
+        # Scroll down to trigger lazy-loading of all products on the page
+        print("Scrolling to reveal all products on the page...")
+        for i in range(3):
+            driver.execute_script("window.scrollBy(0, 1000);")
+            spinner_sleep(1.5, f"Scrolling pass {i+1}/3")
+
+        items = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
+        if not items:
             print(f"No product items detected on page {current_page}. This might be the end of the results.")
             break
 
         page_items_parsed = 0
-        for i in range(num_items):
+        for item in items:
             try:
-                # Re-find items on each iteration to get a fresh reference
-                all_items_fresh = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
-                if i >= len(all_items_fresh):
-                    print(f"Warning: Item count changed during scrape on page {current_page}. Skipping remaining items.")
-                    break
-                item = all_items_fresh[i]
-
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
+                image_url = item.find_element("css selector", "img").get_attribute("src")
 
-                image_url = ""  # Default to empty string
-                try:
-                    # Scroll the item into view to trigger lazy loading
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
-
-                    # Custom wait loop to robustly handle StaleElementReferenceException
-                    start_time = time.time()
-                    while time.time() - start_time < 5: # 5-second timeout
-                        try:
-                            # Re-find element inside the loop to ensure it's not stale
-                            img_element_fresh = driver.find_elements("css selector", "div[data-qa-locator='product-item']")[i].find_element("css selector", "img")
-                            current_src = img_element_fresh.get_attribute("src")
-                            if current_src and current_src.startswith("http"):
-                                image_url = re.sub(r'_\d+x\d+q\d+', '', current_src)
-                                break # Success
-                        except (StaleElementReferenceException, IndexError):
-                            time.sleep(0.2) # Element is stale or not ready, wait and retry
-                except (NoSuchElementException):
-                    pass
-
-                # Re-acquire a fresh reference to the item before accessing its text
-                # to prevent StaleElementReferenceException after the image-loading scroll.
-                item_for_text = driver.find_elements("css selector", "div[data-qa-locator='product-item']")[i]
-                lines = item_for_text.text.strip().split("\n")
+                # Use resilient text-parsing logic from the working test.py script
+                lines = item.text.strip().split("\n")
                 
                 title_text = None
                 price_text = None
@@ -233,7 +207,7 @@ def scrape_all_pages(driver, search_query):
                         "Image URL": image_url
                     })
                     page_items_parsed += 1
-            except (NoSuchElementException, ValueError, IndexError):
+            except (NoSuchElementException, ValueError):
                 # This item might be an ad or have a different structure. Skip it.
                 continue
 
@@ -245,18 +219,15 @@ def scrape_all_pages(driver, search_query):
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
                 spinner_sleep(1, "Preparing for next page...")
                 next_button.click()
-
-                # --- Robust Page Transition Wait ---
-                # Instead of waiting for an old element to go stale (which was unreliable),
-                # we now explicitly wait for the URL to reflect the new page number.
-                # This is a much more reliable signal that the page has changed.
-                next_page_num = current_page + 1
-                print(f"Navigating to page {next_page_num}...")
-                WebDriverWait(driver, 15).until(lambda d: f"page={next_page_num}" in d.current_url)
-                time.sleep(1) # Allow a brief moment for JS on the new page to settle.
-                current_page = next_page_num
-            except (TimeoutException, NoSuchElementException):
-                print("\nCould not find 'Next Page' button or transition failed. Assuming end of search results.")
+                print("Navigating to the next page...")
+                try:
+                    # Wait for the old "next" button to become stale, indicating a page change
+                    driver.wait_for_staleness_of(next_button, timeout=15)
+                except Exception:
+                    print("Warning: Timed out waiting for page transition. Proceeding anyway.")
+                current_page += 1
+            except Exception:
+                print("Could not find 'Next Page' button. Assuming end of search results.")
                 break
         else:
             break

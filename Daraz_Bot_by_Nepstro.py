@@ -199,7 +199,18 @@ def scrape_all_pages(driver, search_query):
                     pass # Image not loaded, URL remains empty
 
                 # --- Robust Data Parsing ---
-                title_text = item.find_element("css selector", "a").get_attribute('title')
+                # Prioritize the 'title' attribute, but fall back to parsing text if it's empty.
+                # This fixes the issue where the keyword filter fails because the title attribute is blank.
+                title_text = item.find_element("css selector", "a").get_attribute('title').strip()
+                if not title_text:
+                    lines = item.text.strip().split("\n")
+                    for line in lines:
+                        cleaned = line.strip()
+                        # Filter out common junk text (prices, badges, etc.) to find the title.
+                        if cleaned and "Rs." not in cleaned and not cleaned.isdigit() and cleaned not in ["Choice", "Mall", "Free Shipping", "Coins"]:
+                            title_text = cleaned
+                            break # Assume first valid line is the title
+
                 price_text = item.find_element("css selector", ".ooOxS").text
                 clean_price = re.sub(r'[^\d]', '', price_text)
 

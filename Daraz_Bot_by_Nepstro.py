@@ -163,6 +163,12 @@ def scrape_all_pages(driver, search_query):
     while current_page <= MAX_PAGES_TO_CRAWL:
         print(f"\n--- Processing Catalog Page {current_page} of {MAX_PAGES_TO_CRAWL} ---")
         
+        # Scroll down to trigger lazy-loading of all products on the page
+        print("Scrolling to reveal all products on the page...")
+        for i in range(3):
+            driver.execute_script("window.scrollBy(0, 1000);")
+            spinner_sleep(1.5, f"Scrolling pass {i+1}/3")
+
         items = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
         if not items:
             print(f"No product items detected on page {current_page}. This might be the end of the results.")
@@ -174,24 +180,20 @@ def scrape_all_pages(driver, search_query):
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
 
-                # --- Robust Lazy-Loading Image Scraper ---
-                # This logic scrolls each item into view to force the browser to load
-                # the real image, then intelligently checks both 'src' and 'data-src'.
                 img_element = item.find_element("css selector", "img")
 
-                # 1. Scroll the item into the middle of the screen to trigger the load.
-                # This is more reliable than a generic page scroll.
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
-                time.sleep(0.3)  # A crucial pause for the site's JS to swap the image URL.
+                # Reverting to the previous logic: Scroll each image into view to force lazy-loading.
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", img_element)
+                time.sleep(0.2) # Brief pause for JS to swap the src
 
-                # 2. After scrolling, 'src' is the most likely place for the real URL.
-                image_url = img_element.get_attribute("src")
+                # Try 'data-src' first, as it's the common lazy-load attribute
+                image_url = img_element.get_attribute("data-src")
 
-                # 3. If 'src' is still a placeholder (data URI), fall back to 'data-src'.
+                # If 'data-src' is empty or a placeholder, fall back to 'src'
                 if not image_url or image_url.startswith('data:image'):
-                    image_url = img_element.get_attribute("data-src")
+                    image_url = img_element.get_attribute("src")
 
-                # 4. Final cleanup to ensure an absolute, valid URL.
+                # Final cleanup to fix protocol-relative URLs and handle placeholders
                 if image_url and image_url.startswith('//'):
                     image_url = 'https:' + image_url
                 elif not image_url or image_url.startswith('data:image'):

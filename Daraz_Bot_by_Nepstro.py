@@ -537,7 +537,9 @@ def run_deep_search():
     
     print("Keep the opened browser and wait for the magic to happen...")
     driver = Driver(uc=True, headless=False)
-    driver.minimize_window()
+    # Instead of minimizing (which can pause browser JS), we move the window off-screen.
+    # This keeps it invisible but fully active, ensuring the script runs at full speed.
+    driver.set_window_position(-3000, 0)
     
     try:
         while True:
@@ -556,7 +558,8 @@ def run_deep_search():
                     driver.quit() # Attempt to clean up the old one
                 except Exception: pass
                 driver = Driver(uc=True, headless=False)
-                driver.minimize_window()
+                # Move the new window off-screen as well
+                driver.set_window_position(-3000, 0)
                 all_listings = scrape_all_pages(driver, config['search_query'])
             
             df_processed, anomalies, median_price = analyze_data(all_listings, config)

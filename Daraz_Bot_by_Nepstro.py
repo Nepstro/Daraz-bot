@@ -3,7 +3,7 @@ import time
 import pandas as pd
 from seleniumbase import Driver
 import sys
-from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException, TimeoutException
+from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException, TimeoutException, StaleElementReferenceException
 import webbrowser
 import re
 from io import StringIO

@@ -237,17 +237,22 @@ def scrape_all_pages(driver, search_query):
 
         if current_page < MAX_PAGES_TO_CRAWL:
             try:
-                next_button = driver.find_element("css selector", ".ant-pagination-next:not(.ant-pagination-disabled) a")
+                # The selector is updated to target the parent <li> element, which is more robust.
+                # The click event is often attached to this container rather than the inner <a> or <svg>.
+                next_button = driver.find_element("css selector", ".ant-pagination-next:not(.ant-pagination-disabled)")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
                 spinner_sleep(1, "Preparing for next page...")
                 next_button.click()
                 
+                next_page_num = current_page + 1
                 # --- Robust Page Transition Wait ---
-                print(f"Navigating to page {current_page + 1}...")
+                # Reverting to a URL-based wait, as it's more reliable than checking DOM state.
+                # It waits for the '&page=' parameter in the URL to update.
+                print(f"Navigating to page {next_page_num}...")
                 WebDriverWait(driver, 15).until(
-                    lambda d: d.find_element("css selector", "div[data-qa-locator='product-item']").get_attribute('data-item-id') != first_item_id
+                    lambda d: f"page={next_page_num}" in d.current_url
                 )
-                current_page += 1
+                current_page = next_page_num
             except (TimeoutException, NoSuchElementException):
                 print("\nCould not find 'Next Page' button or transition failed. Assuming end of search results.")
                 break

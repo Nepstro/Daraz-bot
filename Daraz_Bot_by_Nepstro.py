@@ -3,11 +3,12 @@ import time
 import pandas as pd
 from seleniumbase import Driver
 import sys
-from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException
+from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException, TimeoutException
 import webbrowser
 import re
 from io import StringIO
 import random
+from selenium.webdriver.support.ui import WebDriverWait
 
 # --- Static Global Settings ---
 MAX_PAGES_TO_CRAWL = 4
@@ -180,24 +181,24 @@ def scrape_all_pages(driver, search_query):
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
 
-                img_element = item.find_element("css selector", "img")
+                image_url = ""  # Default to empty string
+                try:
+                    img_element = item.find_element("css selector", "img")
 
-                # Reverting to the previous logic: Scroll each image into view to force lazy-loading.
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", img_element)
-                time.sleep(0.2) # Brief pause for JS to swap the src
+                    # 1. Scroll into view to trigger lazy loading
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", img_element)
 
-                # Try 'data-src' first, as it's the common lazy-load attribute
-                image_url = img_element.get_attribute("data-src")
+                    # 2. Wait for the src to transition from a placeholder to a real URL
+                    WebDriverWait(driver, 5).until(
+                        lambda d: img_element.get_attribute("src") and img_element.get_attribute("src").startswith("http")
+                    )
 
-                # If 'data-src' is empty or a placeholder, fall back to 'src'
-                if not image_url or image_url.startswith('data:image'):
-                    image_url = img_element.get_attribute("src")
-
-                # Final cleanup to fix protocol-relative URLs and handle placeholders
-                if image_url and image_url.startswith('//'):
-                    image_url = 'https:' + image_url
-                elif not image_url or image_url.startswith('data:image'):
-                    image_url = ""  # Default to empty string if no valid URL was found.
+                    # 3. Extract and clean the URL to get higher resolution
+                    raw_url = img_element.get_attribute("src")
+                    image_url = re.sub(r'_\d+x\d+q\d+', '', raw_url)
+                except (TimeoutException, NoSuchElementException):
+                    # If the image doesn't load in time or isn't found, URL will be empty.
+                    pass
 
                 # Use resilient text-parsing logic from the working test.py script
                 lines = item.text.strip().split("\n")

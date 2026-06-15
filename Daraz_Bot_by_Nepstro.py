@@ -55,6 +55,8 @@ def spinner_sleep(duration, message=""):
         keyframes = [
             "_______", "______🚚💨", "_____🚚💨_", "____🚚💨__",
             "___🚚💨___", "__🚚💨____", "_🚚💨_____", "🚚💨______",
+            "_______", "______>", "_____>_", "____>__",
+            "___>___", "__>____", "_>_____", ">______",
         ]
         daraz_phrases = [
             "Bargaining with sellers...", "Dodging flash sales...", "Counting delivery bikes...",
@@ -179,11 +181,21 @@ def scrape_all_pages(driver, search_query):
     while current_page <= MAX_PAGES_TO_CRAWL:
         print(f"\n--- Processing Catalog Page {current_page} of {MAX_PAGES_TO_CRAWL} ---")
         
-        # Scroll down to trigger lazy-loading of all products on the page
-        print("Scrolling to reveal all products on the page...")
-        for i in range(3):
-            driver.execute_script("window.scrollBy(0, 1000);")
-            spinner_sleep(1.5, f"Scrolling pass {i+1}/3")
+        # --- Robust Scrolling to Trigger All Lazy-Loaded Content ---
+        # Scrolls to the bottom of the page to ensure all images are loaded.
+        print("Scrolling to page bottom to reveal all products...")
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        scroll_pass = 1
+        while True:
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            spinner_sleep(2, f"Scrolling to page bottom (pass {scroll_pass})...")
+            
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                print("Reached the bottom of the page.")
+                break
+            last_height = new_height
+            scroll_pass += 1
 
         items = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
         if not items:

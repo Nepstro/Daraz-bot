@@ -165,9 +165,9 @@ def scrape_all_pages(driver, search_query):
         
         # Scroll down to trigger lazy-loading of all products on the page
         print("Scrolling to reveal all products on the page...")
-        for _ in range(3):
+        for i in range(3):
             driver.execute_script("window.scrollBy(0, 1000);")
-            time.sleep(1.5)
+            spinner_sleep(1.5, f"Scrolling pass {i+1}/3")
 
         items = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
         if not items:
@@ -217,7 +217,7 @@ def scrape_all_pages(driver, search_query):
             try:
                 next_button = driver.find_element("css selector", "li[title='Next Page']:not(.ant-pagination-disabled)")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
-                time.sleep(1)
+                spinner_sleep(1, "Preparing for next page...")
                 next_button.click()
                 print("Navigating to the next page...")
                 try:

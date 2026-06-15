@@ -53,8 +53,8 @@ def spinner_sleep(duration, message=""):
 
     if is_windows:
         keyframes = [
-            "_______", "______>", "_____>_", "____>__",
-            "___>___", "__>____", "_>_____", ">______",
+            "_______", "______🚚💨", "_____🚚💨_", "____🚚💨__",
+            "___🚚💨___", "__🚚💨____", "_🚚💨_____", "🚚💨______",
         ]
         daraz_phrases = [
             "Bargaining with sellers...", "Dodging flash sales...", "Counting delivery bikes...",

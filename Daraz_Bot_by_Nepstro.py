@@ -134,8 +134,8 @@ def get_user_config():
     else:
         config['deviation_threshold'] = 0.50
         
-    exclude_input = input("Enter keywords to EXCLUDE accessories (comma-separated, e.g., liner,pot,paper): ").strip().lower()
-    config['exclude_keywords'] = [kw.strip() for kw in exclude_input.split(',') if kw.strip()] if exclude_input else []
+    exclude_input = input("Enter keywords to EXCLUDE accessories (comma-separated, e.g., cover|liner|bracket|holder| etc.): ").strip().lower()
+    config['exclude_keywords'] = [kw.strip() for kw in exclude_input.split('|') if kw.strip()] if exclude_input else []
         
     return config
 

@@ -47,29 +47,45 @@ def display_header():
     print("\n")
 
 def spinner_sleep(duration, message=""):
-    """Displays a CLI spinner for a given duration."""
-    keyframes = [
-        "_______", "______🚚", "_____🚚_", "____🚚__",
-        "___🚚__", "__🚚___", "_🚚____", "🚚_____",
-    ]
+    """Displays a CLI spinner for a given duration, with OS-aware characters."""
+    # OS-specific characters for better compatibility, as emojis can fail on Windows CMD
+    is_windows = sys.platform == "win32"
+
+    if is_windows:
+        keyframes = [
+            "_______", "______>", "_____>_", "____>__",
+            "___>___", "__>____", "_>_____", ">______",
+        ]
+        daraz_phrases = [
+            "Bargaining with sellers...", "Dodging flash sales...", "Counting delivery bikes...",
+            "Looking for 'Machan' deals...", "Checking if it's 'original'...",
+            "Convincing the delivery guy it's prepaid...", "Adding to cart... then closing the tab.",
+            "Waiting for the OTP that never comes...", "Filtering out the 'for cover' listings...",
+            "Checking if a missing zero made a laptop Rs. 1,500...",
+            "Scanning for decimal point placement disasters...",
+            "Hunting for sellers who confused USD prices with LKR...",
+            "Exploiting coupon codes that accidentally stack...",
+            "Looking for listings where the discount is higher than the price...",
+        ]
+    else:
+        keyframes = [
+            "_______", "______🚚", "_____🚚_", "____🚚__",
+            "___🚚__", "__🚚___", "_🚚____", "🚚_____",
+        ]
+        daraz_phrases = [
+            "Bargaining with sellers... 🤝", "Dodging flash sales... 🏃‍♂️💨", "Counting delivery bikes... 🏍️",
+            "Looking for 'Machan' deals... 👀", "Checking if it's 'original'... 🤔",
+            "Convincing the delivery guy it's prepaid... 😅", "Adding to cart... then closing the tab. 🙈",
+            "Waiting for the OTP that never comes... ⏳", "Filtering out the 'for cover' listings... 🕵️‍♀️",
+            "Checking if a missing zero made a laptop Rs. 1,500... 🤯",
+            "Scanning for decimal point placement disasters... 🧐",
+            "Hunting for sellers who confused USD prices with LKR... 🕵️‍♂️",
+            "Exploiting coupon codes that accidentally stack... 🤑",
+            "Looking for listings where the discount is higher than the price... 💸",
+        ]
+
     start_time = time.time()
     i = 0
-    daraz_phrases = [
-        "Bargaining with sellers... 🤝",
-        "Dodging flash sales... 🏃‍♂️💨",
-        "Counting delivery bikes... 🏍️",
-        "Looking for 'Machan' deals... 👀",
-        "Checking if it's 'original'... 🤔",
-        "Convincing the delivery guy it's prepaid... 😅",
-        "Adding to cart... then closing the tab. 🙈",
-        "Waiting for the OTP that never comes... ⏳",
-        "Filtering out the 'for cover' listings... 🕵️‍♀️",
-        "Checking if a missing zero made a laptop Rs. 1,500... 🤯",
-        "Scanning for decimal point placement disasters... 🧐",
-        "Hunting for sellers who confused USD prices with LKR... 🕵️‍♂️",
-        "Exploiting coupon codes that accidentally stack... 🤑",
-        "Looking for listings where the discount is higher than the price... 💸",
-    ]
     funny_message = random.choice(daraz_phrases)
     while time.time() - start_time < duration:
         frame = keyframes[i % len(keyframes)]
@@ -165,9 +181,9 @@ def scrape_all_pages(driver, search_query):
         
         # Scroll down to trigger lazy-loading of all products on the page
         print("Scrolling to reveal all products on the page...")
-        for _ in range(3):
+        for i in range(3):
             driver.execute_script("window.scrollBy(0, 1000);")
-            time.sleep(1.5)
+            spinner_sleep(1.5, f"Scrolling pass {i+1}/3")
 
         items = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
         if not items:
@@ -227,7 +243,7 @@ def scrape_all_pages(driver, search_query):
             try:
                 next_button = driver.find_element("css selector", "li[title='Next Page']:not(.ant-pagination-disabled)")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
-                time.sleep(1)
+                spinner_sleep(1, "Navigating to next page...")
                 next_button.click()
                 print("Navigating to the next page...")
                 try:

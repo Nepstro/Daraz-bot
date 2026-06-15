@@ -196,15 +196,20 @@ def scrape_all_pages(driver, search_query):
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
 
-                # Handle lazy-loaded images. Daraz often puts the real URL in 'data-src'.
-                # We'll try to get 'data-src' first and fall back to 'src' just in case.
+                # --- Robust Image URL Extraction ---
+                # Handles lazy loading by checking 'data-src' then 'src',
+                # while filtering out placeholder data URIs.
                 img_element = item.find_element("css selector", "img")
-                image_url = img_element.get_attribute("data-src")
+                image_url = img_element.get_attribute("data-src")  # Prioritize 'data-src'
+
+                # If 'data-src' is empty, fall back to 'src'
                 if not image_url:
                     image_url = img_element.get_attribute("src")
 
-                # Fix for protocol-relative URLs (e.g., "//laz-img-cdn.alicdn.com/...")
-                if image_url and image_url.startswith('//'):
+                # Invalidate the URL if it's a placeholder, then fix protocol
+                if not image_url or image_url.startswith('data:image'):
+                    image_url = ''
+                elif image_url.startswith('//'):
                     image_url = 'https:' + image_url
 
                 # Use resilient text-parsing logic from the working test.py script

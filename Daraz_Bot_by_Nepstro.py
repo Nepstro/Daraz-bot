@@ -245,15 +245,18 @@ def scrape_all_pages(driver, search_query):
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
                 spinner_sleep(1, "Preparing for next page...")
                 next_button.click()
-                print("Navigating to the next page...")
-                try:
-                    # Wait for the old "next" button to become stale, indicating a page change
-                    driver.wait_for_staleness_of(next_button, timeout=15)
-                except Exception:
-                    print("Warning: Timed out waiting for page transition. Proceeding anyway.")
-                current_page += 1
-            except Exception:
-                print("Could not find 'Next Page' button. Assuming end of search results.")
+
+                # --- Robust Page Transition Wait ---
+                # Instead of waiting for an old element to go stale (which was unreliable),
+                # we now explicitly wait for the URL to reflect the new page number.
+                # This is a much more reliable signal that the page has changed.
+                next_page_num = current_page + 1
+                print(f"Navigating to page {next_page_num}...")
+                WebDriverWait(driver, 15).until(lambda d: f"page={next_page_num}" in d.current_url)
+                time.sleep(1) # Allow a brief moment for JS on the new page to settle.
+                current_page = next_page_num
+            except (TimeoutException, NoSuchElementException):
+                print("\nCould not find 'Next Page' button or transition failed. Assuming end of search results.")
                 break
         else:
             break

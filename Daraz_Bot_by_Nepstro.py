@@ -47,45 +47,29 @@ def display_header():
     print("\n")
 
 def spinner_sleep(duration, message=""):
-    """Displays a CLI spinner for a given duration, with OS-aware characters."""
-    # OS-specific characters for better compatibility, as emojis can fail on Windows CMD
-    is_windows = sys.platform == "win32"
-
-    if is_windows:
-        keyframes = [
-            "_______", "______>", "_____>_", "____>__",
-            "___>___", "__>____", "_>_____", ">______",
-        ]
-        daraz_phrases = [
-            "Bargaining with sellers...", "Dodging flash sales...", "Counting delivery bikes...",
-            "Looking for 'Machan' deals...", "Checking if it's 'original'...",
-            "Convincing the delivery guy it's prepaid...", "Adding to cart... then closing the tab.",
-            "Waiting for the OTP that never comes...", "Filtering out the 'for cover' listings...",
-            "Checking if a missing zero made a laptop Rs. 1,500...",
-            "Scanning for decimal point placement disasters...",
-            "Hunting for sellers who confused USD prices with LKR...",
-            "Exploiting coupon codes that accidentally stack...",
-            "Looking for listings where the discount is higher than the price...",
-        ]
-    else:
-        keyframes = [
-            "_______", "______🚚", "_____🚚_", "____🚚__",
-            "___🚚__", "__🚚___", "_🚚____", "🚚_____",
-        ]
-        daraz_phrases = [
-            "Bargaining with sellers... 🤝", "Dodging flash sales... 🏃‍♂️💨", "Counting delivery bikes... 🏍️",
-            "Looking for 'Machan' deals... 👀", "Checking if it's 'original'... 🤔",
-            "Convincing the delivery guy it's prepaid... 😅", "Adding to cart... then closing the tab. 🙈",
-            "Waiting for the OTP that never comes... ⏳", "Filtering out the 'for cover' listings... 🕵️‍♀️",
-            "Checking if a missing zero made a laptop Rs. 1,500... 🤯",
-            "Scanning for decimal point placement disasters... 🧐",
-            "Hunting for sellers who confused USD prices with LKR... 🕵️‍♂️",
-            "Exploiting coupon codes that accidentally stack... 🤑",
-            "Looking for listings where the discount is higher than the price... 💸",
-        ]
-
+    """Displays a CLI spinner for a given duration."""
+    keyframes = [
+        "_______", "______🚚", "_____🚚_", "____🚚__",
+        "___🚚__", "__🚚___", "_🚚____", "🚚_____",
+    ]
     start_time = time.time()
     i = 0
+    daraz_phrases = [
+        "Bargaining with sellers... 🤝",
+        "Dodging flash sales... 🏃‍♂️💨",
+        "Counting delivery bikes... 🏍️",
+        "Looking for 'Machan' deals... 👀",
+        "Checking if it's 'original'... 🤔",
+        "Convincing the delivery guy it's prepaid... 😅",
+        "Adding to cart... then closing the tab. 🙈",
+        "Waiting for the OTP that never comes... ⏳",
+        "Filtering out the 'for cover' listings... 🕵️‍♀️",
+        "Checking if a missing zero made a laptop Rs. 1,500... 🤯",
+        "Scanning for decimal point placement disasters... 🧐",
+        "Hunting for sellers who confused USD prices with LKR... 🕵️‍♂️",
+        "Exploiting coupon codes that accidentally stack... 🤑",
+        "Looking for listings where the discount is higher than the price... 💸",
+    ]
     funny_message = random.choice(daraz_phrases)
     while time.time() - start_time < duration:
         frame = keyframes[i % len(keyframes)]
@@ -179,21 +163,11 @@ def scrape_all_pages(driver, search_query):
     while current_page <= MAX_PAGES_TO_CRAWL:
         print(f"\n--- Processing Catalog Page {current_page} of {MAX_PAGES_TO_CRAWL} ---")
         
-        # --- Robust Scrolling to Trigger All Lazy-Loaded Content ---
-        # Scrolls to the bottom of the page to ensure all images are loaded.
-        print("Scrolling to page bottom to reveal all products...")
-        last_height = driver.execute_script("return document.body.scrollHeight")
-        scroll_pass = 1
-        while True:
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            spinner_sleep(2, f"Scrolling to page bottom (pass {scroll_pass})...")
-            
-            new_height = driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
-                print("Reached the bottom of the page.")
-                break
-            last_height = new_height
-            scroll_pass += 1
+        # Scroll down to trigger lazy-loading of all products on the page
+        print("Scrolling to reveal all products on the page...")
+        for _ in range(3):
+            driver.execute_script("window.scrollBy(0, 1000);")
+            time.sleep(1.5)
 
         items = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
         if not items:
@@ -205,27 +179,7 @@ def scrape_all_pages(driver, search_query):
             try:
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
-
-                # --- Robust Image URL Extraction ---
-                # Handles lazy loading by checking 'data-src' then 'src',
-                # while filtering out placeholder data URIs.
-                img_element = item.find_element("css selector", "img")
-
-                # Per your suggestion, scroll the image into view to force lazy-loading.
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", img_element)
-                time.sleep(0.2) # Brief pause for JS to swap the src
-
-                image_url = img_element.get_attribute("data-src")  # Prioritize 'data-src'
-
-                # If 'data-src' is empty or a placeholder, fall back to 'src'
-                if not image_url or image_url.startswith('data:image'):
-                    image_url = img_element.get_attribute("src")
-
-                # Invalidate the URL if it's a placeholder, then fix protocol
-                if not image_url or image_url.startswith('data:image'):
-                    image_url = ''
-                elif image_url.startswith('//'):
-                    image_url = 'https:' + image_url
+                image_url = item.find_element("css selector", "img").get_attribute("src")
 
                 # Use resilient text-parsing logic from the working test.py script
                 lines = item.text.strip().split("\n")
@@ -263,7 +217,7 @@ def scrape_all_pages(driver, search_query):
             try:
                 next_button = driver.find_element("css selector", "li[title='Next Page']:not(.ant-pagination-disabled)")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
-                spinner_sleep(1, "Navigating to next page...")
+                time.sleep(1)
                 next_button.click()
                 print("Navigating to the next page...")
                 try:

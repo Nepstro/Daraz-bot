@@ -3,11 +3,12 @@ import time
 import pandas as pd
 from seleniumbase import Driver
 import sys
-from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException
+from selenium.common.exceptions import InvalidSessionIdException, NoSuchElementException, TimeoutException, StaleElementReferenceException
 import webbrowser
 import re
 from io import StringIO
 import random
+from selenium.webdriver.support.ui import WebDriverWait
 
 # --- Static Global Settings ---
 MAX_PAGES_TO_CRAWL = 4
@@ -162,52 +163,62 @@ def scrape_all_pages(driver, search_query):
     current_page = 1
     while current_page <= MAX_PAGES_TO_CRAWL:
         print(f"\n--- Processing Catalog Page {current_page} of {MAX_PAGES_TO_CRAWL} ---")
-        
-        # Scroll down to trigger lazy-loading of all products on the page
-        print("Scrolling to reveal all products on the page...")
-        for i in range(3):
-            driver.execute_script("window.scrollBy(0, 1000);")
-            spinner_sleep(1.5, f"Scrolling pass {i+1}/3")
 
-        items = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
-        if not items:
+        try:
+            # Get the ID of the first item on the page to detect page changes later
+            first_item_id = driver.find_element("css selector", "div[data-qa-locator='product-item']").get_attribute('data-item-id')
+        except NoSuchElementException:
             print(f"No product items detected on page {current_page}. This might be the end of the results.")
             break
 
+        items_on_page = driver.find_elements("css selector", "div[data-qa-locator='product-item']")
+        num_items = len(items_on_page)
+
         page_items_parsed = 0
-        for item in items:
+        for i in range(num_items):
             try:
+                # Re-find the item on each iteration to prevent StaleElementReferenceException
+                item = driver.find_elements("css selector", "div[data-qa-locator='product-item']")[i]
+
+                # Scroll the item into view to trigger lazy loading
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
+
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
-                image_url = item.find_element("css selector", "img").get_attribute("src")
 
-                # Use resilient text-parsing logic from the working test.py script
-                lines = item.text.strip().split("\n")
-                
-                title_text = None
-                price_text = None
-                
-                for line in lines:
-                    cleaned = line.strip()
-                    # Filter out common junk text that can interfere with parsing
-                    if not cleaned or cleaned in ["Choice", "Mall", "Free Shipping", "Coins", "JOIN"]:
-                        continue
-                    if not title_text:
-                        title_text = cleaned
-                    elif "Rs." in cleaned:
-                        price_text = cleaned
-                        break # Price found, no need to parse further lines for this item
-                        
-                if title_text and price_text:
-                    clean_price = price_text.replace("Rs.", "").replace(",", "").strip().split()[0]
-                    all_collected_listings.append({
-                        "Title": title_text,
-                        "Current Price": float(clean_price),
-                        "URL": item_url,
-                        "Image URL": image_url
-                    })
-                    page_items_parsed += 1
-            except (NoSuchElementException, ValueError):
+                # --- Robust Image Extraction ---
+                image_url = ""
+                try:
+                    img_element = item.find_element("css selector", "img")
+                    # Wait for lazy-load: check that src is not a base64 placeholder
+                    WebDriverWait(driver, 5).until(lambda d: "http" in img_element.get_attribute("src"))
+                    raw_url = img_element.get_attribute("src")
+                    # Strip resolution suffixes for high-res version
+                    image_url = re.sub(r'_\d+x\d+q\d+.*$', '', raw_url)
+                except (TimeoutException, NoSuchElementException, StaleElementReferenceException):
+                    pass # Image not loaded, URL remains empty
+
+                # --- Robust Data Parsing ---
+                title_text = item.find_element("css selector", "a").get_attribute('title')
+                price_text = item.find_element("css selector", ".ooOxS").text
+                clean_price = re.sub(r'[^\d]', '', price_text)
+
+                badge_text = ""
+                try:
+                    badge_element = item.find_element("css selector", ".Ic-Xb")
+                    badge_text = badge_element.text.strip()
+                except NoSuchElementException:
+                    pass # No badge found
+
+                all_collected_listings.append({
+                    "Title": title_text,
+                    "Current Price": float(clean_price),
+                    "URL": item_url,
+                    "Image URL": image_url,
+                    "Badge": badge_text
+                })
+                page_items_parsed += 1
+            except (NoSuchElementException, ValueError, StaleElementReferenceException, IndexError):
                 # This item might be an ad or have a different structure. Skip it.
                 continue
 
@@ -215,19 +226,19 @@ def scrape_all_pages(driver, search_query):
 
         if current_page < MAX_PAGES_TO_CRAWL:
             try:
-                next_button = driver.find_element("css selector", "li[title='Next Page']:not(.ant-pagination-disabled)")
+                next_button = driver.find_element("css selector", ".ant-pagination-next:not(.ant-pagination-disabled) a")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
                 spinner_sleep(1, "Preparing for next page...")
                 next_button.click()
-                print("Navigating to the next page...")
-                try:
-                    # Wait for the old "next" button to become stale, indicating a page change
-                    driver.wait_for_staleness_of(next_button, timeout=15)
-                except Exception:
-                    print("Warning: Timed out waiting for page transition. Proceeding anyway.")
+                
+                # --- Robust Page Transition Wait ---
+                print(f"Navigating to page {current_page + 1}...")
+                WebDriverWait(driver, 15).until(
+                    lambda d: d.find_element("css selector", "div[data-qa-locator='product-item']").get_attribute('data-item-id') != first_item_id
+                )
                 current_page += 1
-            except Exception:
-                print("Could not find 'Next Page' button. Assuming end of search results.")
+            except (TimeoutException, NoSuchElementException):
+                print("\nCould not find 'Next Page' button or transition failed. Assuming end of search results.")
                 break
         else:
             break
@@ -273,61 +284,68 @@ def analyze_data(listings, config):
         print("No items remained after applying all filters. Analysis cannot proceed.")
         return None, None, None
 
-    # --- ADAPTIVE TWO-PASS FILTER LOGIC ---
-    if base_price_floor == 0.0:
-        print("\nBase floor set to 0. Activating Adaptive Two-Pass Median Filtering...")
-        price_cutoff_for_median = df_fully_filtered["Current Price"].quantile(0.50)
-        df_baseline_pool = df_fully_filtered[df_fully_filtered["Current Price"] >= price_cutoff_for_median]
-        
-        if df_baseline_pool.empty:
-            median_market_price = df_fully_filtered["Current Price"].median()
-        else:
-            median_market_price = df_baseline_pool["Current Price"].median()
-        
-        df_filtered = df_fully_filtered.copy()
+    # --- IQR Outlier Filtering for Accurate Median ---
+    # This provides a more accurate "True Market Price" by removing extreme outliers before calculating the median.
+    print("\nFiltering dataset for a more accurate market median using IQR...")
+    prices = df_fully_filtered["Current Price"]
+    Q1 = prices.quantile(0.25)
+    Q3 = prices.quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+
+    df_baseline_pool = df_fully_filtered[(prices >= lower_bound) & (prices <= upper_bound)]
+
+    if df_baseline_pool.empty:
+        print("Warning: IQR filtering removed all items. Falling back to median of the full dataset.")
+        median_market_price = df_fully_filtered["Current Price"].median()
     else:
-        df_filtered = df_fully_filtered[df_fully_filtered["Current Price"] >= base_price_floor].copy()
-        if df_filtered.empty:
-            print(f"\nAll items removed by the active Rs. {base_price_floor:,.2f} filter.")
-            return None, None, None
-        median_market_price = df_filtered["Current Price"].median()
-        
-    total_records = len(df_filtered)
+        print(f"IQR filter retained {len(df_baseline_pool)} of {len(df_fully_filtered)} items for median calculation.")
+        median_market_price = df_baseline_pool["Current Price"].median()
+    
+    total_records = len(df_fully_filtered)
     
     print(f"\n=== SELECTION STATISTICS ===")
     print(f"Total Products Evaluated (post-filtering): {total_records}")
     print(f"Calculated Market Median (post-filtering): Rs. {median_market_price:,.2f}")
     
-    anomalies = df_filtered[df_filtered["Current Price"] <= (median_market_price * (1 - config['deviation_threshold']))]
+    anomalies = df_fully_filtered[df_fully_filtered["Current Price"] <= (median_market_price * (1 - config['deviation_threshold']))]
     
-    return df_filtered, anomalies, median_market_price
+    return df_fully_filtered, anomalies, median_market_price
 
 def build_html_table(df, config, highlight_identifiers=set()):
     """Builds a clean HTML table string from a DataFrame."""
     table_html = '<table class="table">\n'
     # Headers
     table_html += "  <thead>\n    <tr>\n"
-    table_html += '      <th style="width: 10%;">Image</th>\n'
-    table_html += '      <th style="width: 40%;">Product Details</th>\n'
-    table_html += '      <th style="width: 15%;">Listed Price (Rs.)</th>\n'
-    table_html += '      <th style="width: 15%;">Market Median (Rs.)</th>\n'
-    table_html += '      <th style="width: 10%;">Discount</th>\n'
-    table_html += '      <th style="width: 10%;">Link</th>\n'
+    table_html += '      <th style="width: 8%;">Image</th>\n'
+    table_html += '      <th style="width: 42%;">Product Details</th>\n'
+    table_html += '      <th style="width: 10%;">Badge</th>\n'
+    table_html += '      <th style="width: 12%;">Listed Price (Rs.)</th>\n'
+    table_html += '      <th style="width: 12%;">Market Median (Rs.)</th>\n'
+    table_html += '      <th style="width: 8%;">Discount</th>\n'
+    table_html += '      <th style="width: 8%;">Link</th>\n'
     table_html += "    </tr>\n  </thead>\n"
     # Body
     table_html += "  <tbody>\n"
     for _, row in df.iterrows():
         row_identifier = (row['Title'], row['Current Price'])
         highlight_class = ' class="highlight"' if row_identifier in highlight_identifiers else ''
+        badge = row.get("Badge", "")
+        badge_color = "#007bff" if badge == "Mall" else "#28a745" if badge == "Choice" else "#6c757d"
 
         table_html += f'    <tr{highlight_class}>\n'
         table_html += f'      <td><img src="{row.get("Image URL", "")}" width="100" style="max-width:100px;"></td>\n'
         # Product Details cell
         details_html = f'<td><strong>{row["Title"]}</strong>'
         if pd.notna(row.get('Discount')) and row.get('Discount', 0) >= (config['deviation_threshold'] * 100):
-            details_html += f'<br><p style="color: #dc3545; font-size: 0.9em; margin-top: 5px;">This product is listed at a <strong>{row["Discount"]:.1f}% discount</strong> compared to the market median price of Rs. {row["Market Median"]:,.2f}.</p>'
+            confidence_text = ""
+            if badge == "Mall":
+                confidence_text = " This is a **high-confidence** alert from a Daraz Mall seller."
+            details_html += f'<br><p style="color: #dc3545; font-size: 0.9em; margin-top: 5px;">This product is listed at a <strong>{row["Discount"]:.1f}% discount</strong> compared to the market median price of Rs. {row["Market Median"]:,.2f}.{confidence_text}</p>'
         details_html += '</td>'
         table_html += f'      {details_html}\n'
+        table_html += f'      <td><span style="color: {badge_color}; font-weight: bold;">{badge}</span></td>\n'
         table_html += f'      <td style="font-weight: bold; color: #28a745;">{row["Current Price"]:,.2f}</td>\n'
         median_str = f"{row.get('Market Median', ''):,.2f}" if pd.notna(row.get('Market Median')) else "N/A"
         discount_str = f"{row.get('Discount', ''):.1f}%" if pd.notna(row.get('Discount')) else "N/A"

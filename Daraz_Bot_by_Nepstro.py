@@ -230,12 +230,24 @@ def scrape_all_pages(driver, search_query):
                 except NoSuchElementException:
                     pass # No badge found
 
+                listed_discount = None
+                try:
+                    # Scrape the seller's listed discount percentage, if available
+                    discount_element = item.find_element("css selector", ".IcOsH")
+                    discount_text = discount_element.text.strip() # e.g., "75% Off"
+                    discount_match = re.search(r'(\d+)', discount_text)
+                    if discount_match:
+                        listed_discount = float(discount_match.group(1))
+                except NoSuchElementException:
+                    pass # No listed discount found
+
                 all_collected_listings.append({
                     "Title": title_text,
                     "Current Price": float(clean_price),
                     "URL": item_url,
                     "Image URL": image_url,
-                    "Badge": badge_text
+                    "Badge": badge_text,
+                    "Listed Discount": listed_discount
                 })
                 page_items_parsed += 1
             except (NoSuchElementException, ValueError, StaleElementReferenceException, IndexError):
@@ -344,12 +356,13 @@ def build_html_table(df, config, highlight_identifiers=set()):
     # Headers
     table_html += "  <thead>\n    <tr>\n"
     table_html += '      <th style="width: 8%;">Image</th>\n'
-    table_html += '      <th style="width: 42%;">Product Details</th>\n'
-    table_html += '      <th style="width: 10%;">Badge</th>\n'
-    table_html += '      <th style="width: 12%;">Listed Price (Rs.)</th>\n'
-    table_html += '      <th style="width: 12%;">Market Median (Rs.)</th>\n'
-    table_html += '      <th style="width: 8%;">Discount</th>\n'
-    table_html += '      <th style="width: 8%;">Link</th>\n'
+    table_html += '      <th style="width: 32%;">Product Details</th>\n'
+    table_html += '      <th style="width: 8%;">Badge</th>\n'
+    table_html += '      <th style="width: 10%;">Listed Price (Rs.)</th>\n'
+    table_html += '      <th style="width: 10%;">Market Median (Rs.)</th>\n'
+    table_html += '      <th style="width: 10%;">Market Discount</th>\n'
+    table_html += '      <th style="width: 10%;">Listed Discount</th>\n'
+    table_html += '      <th style="width: 12%;">Link</th>\n'
     table_html += "    </tr>\n  </thead>\n"
     # Body
     table_html += "  <tbody>\n"
@@ -373,9 +386,11 @@ def build_html_table(df, config, highlight_identifiers=set()):
         table_html += f'      <td><span style="color: {badge_color}; font-weight: bold;">{badge}</span></td>\n'
         table_html += f'      <td style="font-weight: bold; color: #28a745;">{row["Current Price"]:,.2f}</td>\n'
         median_str = f"{row.get('Market Median', ''):,.2f}" if pd.notna(row.get('Market Median')) else "N/A"
-        discount_str = f"{row.get('Discount', ''):.1f}%" if pd.notna(row.get('Discount')) else "N/A"
+        market_discount_str = f"{row.get('Discount', ''):.1f}%" if pd.notna(row.get('Discount')) else "N/A"
+        listed_discount_str = f"{row.get('Listed Discount'):.0f}%" if pd.notna(row.get('Listed Discount')) else "N/A"
         table_html += f'      <td>{median_str}</td>\n'
-        table_html += f'      <td>{discount_str}</td>\n'
+        table_html += f'      <td>{market_discount_str}</td>\n'
+        table_html += f'      <td>{listed_discount_str}</td>\n'
         table_html += f'      <td><a href="{row["URL"]}" target="_blank">View Product</a></td>\n'
         table_html += "    </tr>\n"
     table_html += "  </tbody>\n</table>"

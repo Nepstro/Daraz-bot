@@ -180,6 +180,9 @@ def scrape_all_pages(driver, search_query):
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
                 image_url = item.find_element("css selector", "img").get_attribute("src")
+                # Fix for protocol-relative URLs (e.g., "//laz-img-cdn.alicdn.com/...")
+                if image_url and image_url.startswith('//'):
+                    image_url = 'https:' + image_url
 
                 # Use resilient text-parsing logic from the working test.py script
                 lines = item.text.strip().split("\n")

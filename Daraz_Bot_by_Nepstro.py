@@ -311,7 +311,7 @@ def analyze_data(listings, config):
     df_fully_filtered = df_keyword_filtered.copy()
     if exclude_keywords:
         print(f"\nApplying exclusion filter for keywords: {exclude_keywords}")
-        # Create a regex pattern: 'liner|pot|paper'
+        # Create a regex pattern: 'cover|liner|bracket|holder| etc.
         exclude_pattern = '|'.join(map(re.escape, exclude_keywords))
         pre_filter_count = len(df_fully_filtered)
         df_fully_filtered = df_fully_filtered[~df_fully_filtered['Title_Lower'].str.contains(exclude_pattern, regex=True)]

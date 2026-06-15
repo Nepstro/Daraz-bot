@@ -199,9 +199,18 @@ def scrape_all_pages(driver, search_query):
                     pass # Image not loaded, URL remains empty
 
                 # --- Robust Data Parsing ---
-                # Prioritize the 'title' attribute, but fall back to parsing text if it's empty.
-                # This fixes the issue where the keyword filter fails because the title attribute is blank.
+                # This multi-layered approach ensures the most accurate title is captured.
+                # 1. Prioritize the 'title' attribute of the main link.
                 title_text = item.find_element("css selector", "a").get_attribute('title').strip()
+                
+                # 2. If empty, fall back to the image's 'alt' text, which is often a clean title.
+                if not title_text:
+                    try:
+                        title_text = item.find_element("css selector", "img").get_attribute('alt').strip()
+                    except NoSuchElementException:
+                        pass # No image found, proceed to next fallback
+
+                # 3. As a last resort, parse the visible text.
                 if not title_text:
                     lines = item.text.strip().split("\n")
                     for line in lines:

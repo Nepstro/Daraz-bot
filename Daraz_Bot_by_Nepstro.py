@@ -205,8 +205,10 @@ def scrape_all_pages(driver, search_query):
                 except (NoSuchElementException):
                     pass
 
-                # Use resilient text-parsing logic from the working test.py script
-                lines = item.text.strip().split("\n")
+                # Re-acquire a fresh reference to the item before accessing its text
+                # to prevent StaleElementReferenceException after the image-loading scroll.
+                item_for_text = driver.find_elements("css selector", "div[data-qa-locator='product-item']")[i]
+                lines = item_for_text.text.strip().split("\n")
                 
                 title_text = None
                 price_text = None
@@ -231,7 +233,7 @@ def scrape_all_pages(driver, search_query):
                         "Image URL": image_url
                     })
                     page_items_parsed += 1
-            except (NoSuchElementException, ValueError):
+            except (NoSuchElementException, ValueError, IndexError):
                 # This item might be an ad or have a different structure. Skip it.
                 continue
 

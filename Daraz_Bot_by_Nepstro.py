@@ -53,8 +53,6 @@ def spinner_sleep(duration, message=""):
 
     if is_windows:
         keyframes = [
-            "_______", "______🚚💨", "_____🚚💨_", "____🚚💨__",
-            "___🚚💨___", "__🚚💨____", "_🚚💨_____", "🚚💨______",
             "_______", "______>", "_____>_", "____>__",
             "___>___", "__>____", "_>_____", ">______",
         ]
@@ -212,10 +210,15 @@ def scrape_all_pages(driver, search_query):
                 # Handles lazy loading by checking 'data-src' then 'src',
                 # while filtering out placeholder data URIs.
                 img_element = item.find_element("css selector", "img")
+
+                # Per your suggestion, scroll the image into view to force lazy-loading.
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", img_element)
+                time.sleep(0.2) # Brief pause for JS to swap the src
+
                 image_url = img_element.get_attribute("data-src")  # Prioritize 'data-src'
 
-                # If 'data-src' is empty, fall back to 'src'
-                if not image_url:
+                # If 'data-src' is empty or a placeholder, fall back to 'src'
+                if not image_url or image_url.startswith('data:image'):
                     image_url = img_element.get_attribute("src")
 
                 # Invalidate the URL if it's a placeholder, then fix protocol

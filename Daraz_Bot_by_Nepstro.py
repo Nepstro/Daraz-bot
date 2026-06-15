@@ -179,7 +179,14 @@ def scrape_all_pages(driver, search_query):
             try:
                 link_node = item.find_element("css selector", "a")
                 item_url = link_node.get_attribute("href")
-                image_url = item.find_element("css selector", "img").get_attribute("src")
+
+                # Handle lazy-loaded images. Daraz often puts the real URL in 'data-src'.
+                # We'll try to get 'data-src' first and fall back to 'src' just in case.
+                img_element = item.find_element("css selector", "img")
+                image_url = img_element.get_attribute("data-src")
+                if not image_url:
+                    image_url = img_element.get_attribute("src")
+
                 # Fix for protocol-relative URLs (e.g., "//laz-img-cdn.alicdn.com/...")
                 if image_url and image_url.startswith('//'):
                     image_url = 'https:' + image_url

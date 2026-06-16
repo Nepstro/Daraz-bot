@@ -344,8 +344,30 @@ def analyze_data(listings, config):
     
     print(f"\nKeyword/Fuzzy filter applied: Retained {len(df_keyword_filtered)} of {len(df)} items related to '{search_query}'.")
 
+    # --- NEGATIVE KEYWORD FILTER (Accessory Purge) ---
+    # Removes common accessory terms unless the user explicitly searched for them.
+    negative_keywords = [
+        'rack', 'basket', 'cover', 'case', 'liner', 'tray', 'accessories', 'accessory',
+        'parts', 'replacement', 'silicone', 'paper', 'film', 'sticker', 'glass',
+        'shell', 'tools', 'cleaning', 'protector', 'tempered', 'bracket', 
+        'skewer', 'dehydrator', 'mold', 'spare', 'cable', 'charger', 'adapter'
+    ]
+    
+    def is_accessory(title):
+        t_lower = title.lower()
+        search_lower = search_query.lower()
+        return any(
+            (f" {nkw} " in f" {t_lower} ") # Match as whole words to avoid partial matching
+            for nkw in negative_keywords 
+            if nkw not in search_lower
+        )
+        
+    pre_neg_count = len(df_keyword_filtered)
+    df_keyword_filtered = df_keyword_filtered[~df_keyword_filtered['Title_Lower'].apply(is_accessory)].copy()
+    print(f"Negative Accessory filter applied: Retained {len(df_keyword_filtered)} of {pre_neg_count} items.")
+
     if df_keyword_filtered.empty:
-        print("No items matched the search criteria. Analysis cannot proceed.")
+        print("No items matched the search criteria (or all were accessories). Analysis cannot proceed.")
         return None, None, None
 
     # --- AUTOMATIC PRICE FLOOR (Top-Relevance Anchor approach) ---

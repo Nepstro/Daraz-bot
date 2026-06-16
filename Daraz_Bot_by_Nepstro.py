@@ -234,6 +234,37 @@ def scrape_all_pages(driver, search_query):
                         listed_discount = float(discount_match.group(1))
                 except NoSuchElementException:
                     pass # No listed discount found
+                    
+                sold_count = None
+                try:
+                    sold_element = item.find_element("css selector", "._1cEkb")
+                    sold_text = sold_element.text.strip()
+                    sold_match = re.search(r'([\d\.]+k?)\s*sold', sold_text, re.IGNORECASE)
+                    if sold_match:
+                        raw_sold = sold_match.group(1).lower()
+                        if 'k' in raw_sold:
+                            sold_count = int(float(raw_sold.replace('k', '')) * 1000)
+                        else:
+                            sold_count = int(raw_sold)
+                except NoSuchElementException:
+                    pass
+
+                review_count = None
+                try:
+                    review_element = item.find_element("css selector", ".qzqFw")
+                    review_text = review_element.text.strip()
+                    review_match = re.search(r'\((\d+)\)', review_text)
+                    if review_match:
+                        review_count = int(review_match.group(1))
+                except NoSuchElementException:
+                    pass
+                
+                location = ""
+                try:
+                    location_element = item.find_element("css selector", ".oa6ri")
+                    location = location_element.text.strip()
+                except NoSuchElementException:
+                    pass
 
                 all_collected_listings.append({
                     "Title": title_text,
@@ -241,7 +272,10 @@ def scrape_all_pages(driver, search_query):
                     "URL": item_url,
                     "Image URL": image_url,
                     "Badge": badge_text,
-                    "Listed Discount": listed_discount
+                    "Listed Discount": listed_discount,
+                    "Sold Count": sold_count,
+                    "Review Count": review_count,
+                    "Location": location
                 })
                 page_items_parsed += 1
                 
@@ -375,13 +409,14 @@ def build_html_table(df, config, highlight_identifiers=set()):
     # Headers
     table_html += "  <thead>\n    <tr>\n"
     table_html += '      <th style="width: 8%;">Image</th>\n'
-    table_html += '      <th style="width: 32%;">Product Details</th>\n'
+    table_html += '      <th style="width: 25%;">Product Details</th>\n'
     table_html += '      <th style="width: 8%;">Badge</th>\n'
     table_html += '      <th style="width: 10%;">Listed Price (Rs.)</th>\n'
     table_html += '      <th style="width: 10%;">Market Median (Rs.)</th>\n'
-    table_html += '      <th style="width: 10%;">Market Discount</th>\n'
-    table_html += '      <th style="width: 10%;">Listed Discount</th>\n'
-    table_html += '      <th style="width: 12%;">Link</th>\n'
+    table_html += '      <th style="width: 8%;">Market Discount</th>\n'
+    table_html += '      <th style="width: 8%;">Listed Discount</th>\n'
+    table_html += '      <th style="width: 8%;">Metrics</th>\n'
+    table_html += '      <th style="width: 15%;">Link / Location</th>\n'
     table_html += "    </tr>\n  </thead>\n"
     # Body
     table_html += "  <tbody>\n"
@@ -407,10 +442,16 @@ def build_html_table(df, config, highlight_identifiers=set()):
         median_str = f"{row.get('Market Median', ''):,.2f}" if pd.notna(row.get('Market Median')) else "N/A"
         market_discount_str = f"{row.get('Discount', ''):.1f}%" if pd.notna(row.get('Discount')) else "N/A"
         listed_discount_str = f"{row.get('Listed Discount'):.0f}%" if pd.notna(row.get('Listed Discount')) else "N/A"
+        
+        sold_str = f"{row.get('Sold Count')} sold" if pd.notna(row.get('Sold Count')) else "0 sold"
+        review_str = f"({row.get('Review Count')} revs)" if pd.notna(row.get('Review Count')) else "(0 revs)"
+        loc_str = row.get("Location", "Unknown") if pd.notna(row.get("Location")) and row.get("Location", "") else "Unknown"
+        
         table_html += f'      <td>{median_str}</td>\n'
         table_html += f'      <td>{market_discount_str}</td>\n'
         table_html += f'      <td>{listed_discount_str}</td>\n'
-        table_html += f'      <td><a href="{row["URL"]}" target="_blank">View Product</a></td>\n'
+        table_html += f'      <td><span style="font-size:0.9em; color:#495057;">{sold_str}<br>{review_str}</span></td>\n'
+        table_html += f'      <td><a href="{row["URL"]}" target="_blank">View Product</a><br><span style="font-size:0.85em; color:#868e96;">📍 {loc_str}</span></td>\n'
         table_html += "    </tr>\n"
     table_html += "  </tbody>\n</table>"
     return table_html

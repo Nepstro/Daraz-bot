@@ -314,18 +314,37 @@ def analyze_data(listings, config):
         print("No items matched the search criteria. Analysis cannot proceed.")
         return None, None, None
 
-    # --- AUTOMATIC PRICE FLOOR (High-End Median approach) ---
-    upper_half = df_keyword_filtered[df_keyword_filtered['Current Price'] >= df_keyword_filtered['Current Price'].median()]
-    if upper_half.empty:
-        high_median = df_keyword_filtered['Current Price'].median()
-    else:
-        high_median = upper_half['Current Price'].median()
-        
-    automatic_price_floor = high_median * 0.15
+    # --- AUTOMATIC PRICE FLOOR (Gap Analysis approach) ---
+    unique_prices = sorted(df_keyword_filtered['Current Price'].unique())
+    automatic_price_floor = 0
     
-    print(f"\nAutomatic Accessory Filter:")
-    print(f"Determined High-Tier Median: Rs. {high_median:,.2f}")
-    print(f"Established Price Floor: Rs. {automatic_price_floor:,.2f} (15% of High-Tier Median)")
+    if len(unique_prices) > 2:
+        max_ratio = 0
+        best_floor_candidate = 0
+        
+        for i in range(len(unique_prices) - 1):
+            p1 = unique_prices[i]
+            p2 = unique_prices[i+1]
+            if p1 > 0:
+                ratio = p2 / p1
+                # We need a significant jump, e.g. at least 3x
+                if ratio > max_ratio and ratio >= 3.0:
+                    max_ratio = ratio
+                    # Set floor to 40% of the upper tier to catch massive deals safely
+                    best_floor_candidate = p2 * 0.4 
+                    
+        if max_ratio >= 3.0:
+            automatic_price_floor = best_floor_candidate
+            print(f"\nAutomatic Accessory Filter:")
+            print(f"Massive {max_ratio:.1f}x price gap detected! Established Price Floor: Rs. {automatic_price_floor:,.2f}")
+        else:
+            # Fallback for products without massive accessory price gaps
+            automatic_price_floor = df_keyword_filtered['Current Price'].quantile(0.10)
+            print(f"\nAutomatic Accessory Filter:")
+            print(f"No massive price gap detected. Using basic 10th percentile floor: Rs. {automatic_price_floor:,.2f}")
+    else:
+        if unique_prices:
+            automatic_price_floor = unique_prices[0] * 0.5
     
     pre_floor_count = len(df_keyword_filtered)
     df_fully_filtered = df_keyword_filtered[df_keyword_filtered['Current Price'] >= automatic_price_floor].copy()

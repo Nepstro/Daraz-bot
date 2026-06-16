@@ -5,14 +5,14 @@ This Python script is a powerful tool designed to scan Daraz.lk for significant 
 ## 🚀 Features
 
 -   **Deep Catalog Crawling**: Scans multiple pages of search results for a given product query.
--   **Intelligent Filtering**:
-    -   Filters out irrelevant items based on keywords in the product title.
-    -   Allows exclusion of accessories and other unwanted items via negative keywords (e.g., `case`, `cover`, `protector`).
-    -   Uses a base price floor to ignore cheap accessories.
--   **Adaptive Median Pricing**: Calculates a "true" market median price by intelligently filtering the dataset, providing a reliable baseline for comparison.
--   **Anomaly Detection**: Flags products priced significantly below the market median based on a user-defined percentage threshold.
+-   **Advanced NLP & Trust Filtering**:
+    -   **Strict Fuzzy Match**: Enforces strict keyword rules to prevent cross-contamination (e.g. stopping "Air Makeup" from appearing in an "Air Fryer" search).
+    -   **RegEx Accessory Purge**: Uses a robust negative keyword dictionary (`rack`, `case`, `cover`, `makeup`, etc.) with automatic pluralization to annihilate non-product listings before they corrupt the math.
+    -   **Trust Metrics**: Scrapes `Sold Count`, `Review Count`, and `Seller Location` to help you identify true deals versus abandoned or fake listings.
+-   **Dynamic Anchor Pricing**: Calculates a highly accurate "true" market median based purely on Top-Relevance NLP matches, setting a dynamic price floor to protect against cheap off-brand garbage without punishing massive genuine discounts.
+-   **MAD Anomaly Detection**: Replaces basic standard deviations with **Median Absolute Deviation (MAD)** and Modified Z-Scores. This mathematically isolates true pricing "glitches" (Z-Score <= -3.0) and is completely immune to extreme outliers (e.g. a $500,000 listing won't ruin the math).
 -   **Persistent Alert Logging**: Remembers previously found deals in a `triggered_glitches_log.csv` to only notify you of *new* discoveries.
--   **Rich HTML Reports**: Generates a detailed, easy-to-read HTML report for each search, highlighting new deals and providing a full index of all products found.
+-   **Rich HTML Reports**: Generates a detailed, easy-to-read HTML report for each search, placing high-priority anomalies at the top and showcasing the new Trust Metrics alongside the product image.
 -   **Automated Browser Handling**: Uses `seleniumbase` to manage the browser, including minimizing the window on startup to keep your terminal visible.
 
 ---

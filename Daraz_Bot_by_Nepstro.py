@@ -9,9 +9,12 @@ import re
 from io import StringIO
 import random
 from selenium.webdriver.support.ui import WebDriverWait
+from difflib import SequenceMatcher
 
 # --- Static Global Settings ---
-MAX_PAGES_TO_CRAWL = 4
+MAX_PAGES_TO_CRAWL = 10
+MIN_RELEVANCE_RATIO = 0.20
+Z_SCORE_THRESHOLD = -3.0
 ALERT_LOG_FILE = "triggered_glitches_log.csv"
 
 def display_header():
@@ -124,18 +127,6 @@ def get_user_config():
     if not search_query:
         return None
     config['search_query'] = search_query
-
-    floor_input = input("Enter minimum base price to filter out accessories (Default: 0 to show all items): ").strip()
-    config['base_price_floor'] = float(floor_input) if floor_input else 0.0
-
-    threshold_input = input("Enter price drop trigger percentage (e.g., 50 for 50%, 75 for 75%) [Default: 50]: ").strip()
-    if threshold_input:
-        config['deviation_threshold'] = float(threshold_input) / 100.0  
-    else:
-        config['deviation_threshold'] = 0.50
-        
-    exclude_input = input("Enter keywords to EXCLUDE accessories (comma-separated, e.g., cover,case,liner,bracket,holder etc.): ").strip().lower()
-    config['exclude_keywords'] = [kw.strip() for kw in exclude_input.split(',') if kw.strip()] if exclude_input else []
         
     return config
 
@@ -175,6 +166,9 @@ def scrape_all_pages(driver, search_query):
         num_items = len(items_on_page)
 
         page_items_parsed = 0
+        relevant_count = 0
+        search_keywords = [kw.lower() for kw in search_query.split() if kw.isalnum()]
+
         for i in range(num_items):
             try:
                 # Re-find the item on each iteration to prevent StaleElementReferenceException
@@ -240,6 +234,37 @@ def scrape_all_pages(driver, search_query):
                         listed_discount = float(discount_match.group(1))
                 except NoSuchElementException:
                     pass # No listed discount found
+                    
+                sold_count = None
+                try:
+                    sold_element = item.find_element("css selector", "._1cEkb")
+                    sold_text = sold_element.text.strip()
+                    sold_match = re.search(r'([\d\.]+k?)\s*sold', sold_text, re.IGNORECASE)
+                    if sold_match:
+                        raw_sold = sold_match.group(1).lower()
+                        if 'k' in raw_sold:
+                            sold_count = int(float(raw_sold.replace('k', '')) * 1000)
+                        else:
+                            sold_count = int(raw_sold)
+                except NoSuchElementException:
+                    pass
+
+                review_count = None
+                try:
+                    review_element = item.find_element("css selector", ".qzqFw")
+                    review_text = review_element.text.strip()
+                    review_match = re.search(r'\((\d+)\)', review_text)
+                    if review_match:
+                        review_count = int(review_match.group(1))
+                except NoSuchElementException:
+                    pass
+                
+                location = ""
+                try:
+                    location_element = item.find_element("css selector", ".oa6ri")
+                    location = location_element.text.strip()
+                except NoSuchElementException:
+                    pass
 
                 all_collected_listings.append({
                     "Title": title_text,
@@ -247,14 +272,28 @@ def scrape_all_pages(driver, search_query):
                     "URL": item_url,
                     "Image URL": image_url,
                     "Badge": badge_text,
-                    "Listed Discount": listed_discount
+                    "Listed Discount": listed_discount,
+                    "Sold Count": sold_count,
+                    "Review Count": review_count,
+                    "Location": location
                 })
                 page_items_parsed += 1
+                
+                if any(kw in title_text.lower() for kw in search_keywords):
+                    relevant_count += 1
+                    
             except (NoSuchElementException, ValueError, StaleElementReferenceException, IndexError):
                 # This item might be an ad or have a different structure. Skip it.
                 continue
 
         print(f"Successfully compiled {page_items_parsed} product listings from page {current_page}.")
+        
+        if page_items_parsed > 0:
+            relevance_ratio = relevant_count / page_items_parsed
+            print(f"Page Relevance Score: {relevance_ratio*100:.0f}%")
+            if relevance_ratio < MIN_RELEVANCE_RATIO and current_page > 1:
+                print("Relevance dropped significantly below threshold. Assuming irrelevant accessory section reached. Halting crawl.")
+                break
 
         if current_page < MAX_PAGES_TO_CRAWL:
             try:
@@ -283,70 +322,114 @@ def scrape_all_pages(driver, search_query):
     return all_collected_listings
 
 def analyze_data(listings, config):
-    """Analyzes scraped listings to find the market median and price anomalies."""
+    """Analyzes scraped listings to find the market median and price anomalies using MAD."""
     if not listings:
         print("Zero listings recovered across the entire page crawl path.")
         return None, None, None
 
     df = pd.DataFrame(listings)
     search_query = config['search_query']
-    base_price_floor = config['base_price_floor']
 
-    # --- KEYWORD-BASED TITLE FILTER ---
-    # Only include products that actually contain the core search query keywords in their title.
-    # This is crucial for filtering out irrelevant accessories and alternative products.
+    # --- FUZZY KEYWORD-BASED TITLE FILTER ---
     keywords = [kw for kw in search_query.lower().split() if kw.isalnum()]
     df['Title_Lower'] = df['Title'].str.lower()
     
-    df_keyword_filtered = df[df['Title_Lower'].apply(lambda title: all(keyword in title for keyword in keywords))]
+    def calculate_similarity(title):
+        return SequenceMatcher(None, search_query.lower(), title).ratio()
+        
+    df['Similarity'] = df['Title_Lower'].apply(calculate_similarity)
     
-    print(f"\nKeyword filter applied: Retained {len(df_keyword_filtered)} of {len(df)} items containing all keywords from '{search_query}'.")
+    # Require ALL keywords to match strictly OR high fuzzy similarity
+    df_keyword_filtered = df[df['Title_Lower'].apply(lambda title: all(kw in title for kw in keywords)) | (df['Similarity'] > 0.45)].copy()
+    
+    print(f"\nKeyword/Fuzzy filter applied: Retained {len(df_keyword_filtered)} of {len(df)} items related to '{search_query}'.")
+
+    # --- NEGATIVE KEYWORD FILTER (Accessory Purge) ---
+    # Removes common accessory terms unless the user explicitly searched for them.
+    negative_keywords = [
+        'rack', 'basket', 'cover', 'case', 'liner', 'tray', 'accessories', 'accessory',
+        'parts', 'replacement', 'silicone', 'paper', 'film', 'sticker', 'glass',
+        'shell', 'tools', 'cleaning', 'protector', 'tempered', 'bracket', 
+        'skewer', 'dehydrator', 'mold', 'spare', 'cable', 'charger', 'adapter',
+        'makeup', 'powder', 'concealer', 'foundation', 'repair', 'earmuff'
+    ]
+    
+    # Expand list with simple plurals for robustness
+    expanded_neg_keywords = set()
+    for nkw in negative_keywords:
+        expanded_neg_keywords.add(nkw)
+        if not nkw.endswith('s'):
+            expanded_neg_keywords.add(nkw + 's')
+    
+    def is_accessory(title):
+        t_lower = title.lower()
+        search_lower = search_query.lower()
+        return any(
+            re.search(r'\b' + re.escape(nkw) + r'\b', t_lower)
+            for nkw in expanded_neg_keywords 
+            if nkw not in search_lower
+        )
+        
+    pre_neg_count = len(df_keyword_filtered)
+    df_keyword_filtered = df_keyword_filtered[~df_keyword_filtered['Title_Lower'].apply(is_accessory)].copy()
+    print(f"Negative Accessory filter applied: Retained {len(df_keyword_filtered)} of {pre_neg_count} items.")
 
     if df_keyword_filtered.empty:
-        print("No items matched the keyword filter. Analysis cannot proceed.")
+        print("No items matched the search criteria (or all were accessories). Analysis cannot proceed.")
         return None, None, None
 
-    # --- NEGATIVE KEYWORD FILTER ---
-    exclude_keywords = config.get('exclude_keywords', [])
-    df_fully_filtered = df_keyword_filtered.copy()
-    if exclude_keywords:
-        print(f"\nApplying exclusion filter for keywords: {exclude_keywords}")
-        # Create a regex pattern: 'cover|liner|bracket|holder| etc.
-        exclude_pattern = '|'.join(map(re.escape, exclude_keywords))
-        pre_filter_count = len(df_fully_filtered)
-        df_fully_filtered = df_fully_filtered[~df_fully_filtered['Title_Lower'].str.contains(exclude_pattern, regex=True)]
-        print(f"Exclusion filter applied: Retained {len(df_fully_filtered)} of {pre_filter_count} items.")
-
-    if df_fully_filtered.empty:
-        print("No items remained after applying all filters. Analysis cannot proceed.")
-        return None, None, None
-
-    # --- IQR Outlier Filtering for Accurate Median ---
-    # This provides a more accurate "True Market Price" by removing extreme outliers before calculating the median.
-    print("\nFiltering dataset for a more accurate market median using IQR...")
-    prices = df_fully_filtered["Current Price"]
-    Q1 = prices.quantile(0.25)
-    Q3 = prices.quantile(0.75)
-    IQR = Q3 - Q1
-    lower_bound = Q1 - 1.5 * IQR
-    upper_bound = Q3 + 1.5 * IQR
-
-    df_baseline_pool = df_fully_filtered[(prices >= lower_bound) & (prices <= upper_bound)]
-
-    if df_baseline_pool.empty:
-        print("Warning: IQR filtering removed all items. Falling back to median of the full dataset.")
-        median_market_price = df_fully_filtered["Current Price"].median()
+    # --- AUTOMATIC PRICE FLOOR (Top-Relevance Anchor approach) ---
+    # Accessories often overlap with cheap appliances, breaking gap analysis.
+    # Instead, we find the "true" product price by taking the median price of the 
+    # top items whose titles most identically match the search query.
+    df_sorted_by_sim = df_keyword_filtered.sort_values(by='Similarity', ascending=False)
+    top_n = max(3, min(20, int(len(df_sorted_by_sim) * 0.15)))
+    
+    if len(df_sorted_by_sim) < top_n:
+        top_relevant_items = df_sorted_by_sim
     else:
-        print(f"IQR filter retained {len(df_baseline_pool)} of {len(df_fully_filtered)} items for median calculation.")
-        median_market_price = df_baseline_pool["Current Price"].median()
+        top_relevant_items = df_sorted_by_sim.head(top_n)
+        
+    anchor_price = top_relevant_items['Current Price'].median()
+    
+    # Establish floor at 20% of the anchor price. This mathematically purges cheap accessories
+    # while allowing massive (up to 80%) real discounts to pass through.
+    automatic_price_floor = anchor_price * 0.20
+    
+    print(f"\nAutomatic Accessory Filter (Top-Relevance):")
+    print(f"Detected Anchor Price: Rs. {anchor_price:,.2f}")
+    print(f"Established Price Floor: Rs. {automatic_price_floor:,.2f} (20% of Anchor)")
+    
+    pre_floor_count = len(df_keyword_filtered)
+    df_fully_filtered = df_keyword_filtered[df_keyword_filtered['Current Price'] >= automatic_price_floor].copy()
+    print(f"Filter applied: Retained {len(df_fully_filtered)} of {pre_floor_count} items above floor.")
+
+    if len(df_fully_filtered) < 3:
+        print("Not enough items remaining for statistical anomaly detection. Analysis cannot proceed.")
+        return None, None, None
+
+    # --- ROBUST MAD / Z-SCORE ANOMALY DETECTION ---
+    print("\nCalculating robust market statistics using Median Absolute Deviation (MAD)...")
+    prices = df_fully_filtered["Current Price"]
+    median_market_price = prices.median()
+    
+    abs_dev = (prices - median_market_price).abs()
+    mad = abs_dev.median()
+    
+    if mad == 0:
+        mad = prices.std() if prices.std() > 0 else 1.0
+
+    df_fully_filtered['Modified_Z_Score'] = 0.6745 * (prices - median_market_price) / mad
+    df_fully_filtered['Discount'] = (((median_market_price - df_fully_filtered['Current Price']) / median_market_price) * 100)
     
     total_records = len(df_fully_filtered)
     
-    print(f"\n=== SELECTION STATISTICS ===")
-    print(f"Total Products Evaluated (post-filtering): {total_records}")
-    print(f"Calculated Market Median (post-filtering): Rs. {median_market_price:,.2f}")
+    print(f"\n=== MARKET STATISTICS ===")
+    print(f"Total Products Evaluated: {total_records}")
+    print(f"Market Median: Rs. {median_market_price:,.2f}")
+    print(f"Median Absolute Deviation (MAD): Rs. {mad:,.2f}")
     
-    anomalies = df_fully_filtered[df_fully_filtered["Current Price"] <= (median_market_price * (1 - config['deviation_threshold']))]
+    anomalies = df_fully_filtered[df_fully_filtered['Modified_Z_Score'] <= Z_SCORE_THRESHOLD].copy()
     
     return df_fully_filtered, anomalies, median_market_price
 
@@ -356,13 +439,14 @@ def build_html_table(df, config, highlight_identifiers=set()):
     # Headers
     table_html += "  <thead>\n    <tr>\n"
     table_html += '      <th style="width: 8%;">Image</th>\n'
-    table_html += '      <th style="width: 32%;">Product Details</th>\n'
+    table_html += '      <th style="width: 25%;">Product Details</th>\n'
     table_html += '      <th style="width: 8%;">Badge</th>\n'
     table_html += '      <th style="width: 10%;">Listed Price (Rs.)</th>\n'
     table_html += '      <th style="width: 10%;">Market Median (Rs.)</th>\n'
-    table_html += '      <th style="width: 10%;">Market Discount</th>\n'
-    table_html += '      <th style="width: 10%;">Listed Discount</th>\n'
-    table_html += '      <th style="width: 12%;">Link</th>\n'
+    table_html += '      <th style="width: 8%;">Market Discount</th>\n'
+    table_html += '      <th style="width: 8%;">Listed Discount</th>\n'
+    table_html += '      <th style="width: 8%;">Metrics</th>\n'
+    table_html += '      <th style="width: 15%;">Link / Location</th>\n'
     table_html += "    </tr>\n  </thead>\n"
     # Body
     table_html += "  <tbody>\n"
@@ -376,11 +460,11 @@ def build_html_table(df, config, highlight_identifiers=set()):
         table_html += f'      <td><img src="{row.get("Image URL", "")}" width="100" style="max-width:100px;"></td>\n'
         # Product Details cell
         details_html = f'<td><strong>{row["Title"]}</strong>'
-        if pd.notna(row.get('Discount')) and row.get('Discount', 0) >= (config['deviation_threshold'] * 100):
+        if pd.notna(row.get('Modified_Z_Score')) and row.get('Modified_Z_Score', 0) <= Z_SCORE_THRESHOLD:
             confidence_text = ""
             if badge == "Mall":
                 confidence_text = " This is a **high-confidence** alert from a Daraz Mall seller."
-            details_html += f'<br><p style="color: #dc3545; font-size: 0.9em; margin-top: 5px;">This product is listed at a <strong>{row["Discount"]:.1f}% discount</strong> compared to the market median price of Rs. {row["Market Median"]:,.2f}.{confidence_text}</p>'
+            details_html += f'<br><p style="color: #dc3545; font-size: 0.9em; margin-top: 5px;">This product is flagged as a statistical anomaly (Z-Score: {row["Modified_Z_Score"]:.1f})! It is listed at a <strong>{row["Discount"]:.1f}% discount</strong> compared to the market median.{confidence_text}</p>'
         details_html += '</td>'
         table_html += f'      {details_html}\n'
         table_html += f'      <td><span style="color: {badge_color}; font-weight: bold;">{badge}</span></td>\n'
@@ -388,10 +472,16 @@ def build_html_table(df, config, highlight_identifiers=set()):
         median_str = f"{row.get('Market Median', ''):,.2f}" if pd.notna(row.get('Market Median')) else "N/A"
         market_discount_str = f"{row.get('Discount', ''):.1f}%" if pd.notna(row.get('Discount')) else "N/A"
         listed_discount_str = f"{row.get('Listed Discount'):.0f}%" if pd.notna(row.get('Listed Discount')) else "N/A"
+        
+        sold_str = f"{row.get('Sold Count')} sold" if pd.notna(row.get('Sold Count')) else "0 sold"
+        review_str = f"({row.get('Review Count')} revs)" if pd.notna(row.get('Review Count')) else "(0 revs)"
+        loc_str = row.get("Location", "Unknown") if pd.notna(row.get("Location")) and row.get("Location", "") else "Unknown"
+        
         table_html += f'      <td>{median_str}</td>\n'
         table_html += f'      <td>{market_discount_str}</td>\n'
         table_html += f'      <td>{listed_discount_str}</td>\n'
-        table_html += f'      <td><a href="{row["URL"]}" target="_blank">View Product</a></td>\n'
+        table_html += f'      <td><span style="font-size:0.9em; color:#495057;">{sold_str}<br>{review_str}</span></td>\n'
+        table_html += f'      <td><a href="{row["URL"]}" target="_blank">View Product</a><br><span style="font-size:0.85em; color:#868e96;">📍 {loc_str}</span></td>\n'
         table_html += "    </tr>\n"
     table_html += "  </tbody>\n</table>"
     return table_html
@@ -548,7 +638,7 @@ def run_deep_search():
                 print("\nNo search query entered. Exiting.")
                 break  # Exit the while loop
 
-            print(f"\n[CONFIG ACTIVATED] Base Price Floor: Rs. {config['base_price_floor']:,.2f} | Triggering on >= {config['deviation_threshold']*100}% market drop.")
+            print(f"\n[CONFIG ACTIVATED] Initiating automated deep search for '{config['search_query']}'")
             
             try:
                 all_listings = scrape_all_pages(driver, config['search_query'])

@@ -314,37 +314,27 @@ def analyze_data(listings, config):
         print("No items matched the search criteria. Analysis cannot proceed.")
         return None, None, None
 
-    # --- AUTOMATIC PRICE FLOOR (Gap Analysis approach) ---
-    unique_prices = sorted(df_keyword_filtered['Current Price'].unique())
-    automatic_price_floor = 0
+    # --- AUTOMATIC PRICE FLOOR (Top-Relevance Anchor approach) ---
+    # Accessories often overlap with cheap appliances, breaking gap analysis.
+    # Instead, we find the "true" product price by taking the median price of the 
+    # top items whose titles most identically match the search query.
+    df_sorted_by_sim = df_keyword_filtered.sort_values(by='Similarity', ascending=False)
+    top_n = max(3, min(20, int(len(df_sorted_by_sim) * 0.15)))
     
-    if len(unique_prices) > 2:
-        max_ratio = 0
-        best_floor_candidate = 0
-        
-        for i in range(len(unique_prices) - 1):
-            p1 = unique_prices[i]
-            p2 = unique_prices[i+1]
-            if p1 > 0:
-                ratio = p2 / p1
-                # We need a significant jump, e.g. at least 3x
-                if ratio > max_ratio and ratio >= 3.0:
-                    max_ratio = ratio
-                    # Set floor to 40% of the upper tier to catch massive deals safely
-                    best_floor_candidate = p2 * 0.4 
-                    
-        if max_ratio >= 3.0:
-            automatic_price_floor = best_floor_candidate
-            print(f"\nAutomatic Accessory Filter:")
-            print(f"Massive {max_ratio:.1f}x price gap detected! Established Price Floor: Rs. {automatic_price_floor:,.2f}")
-        else:
-            # Fallback for products without massive accessory price gaps
-            automatic_price_floor = df_keyword_filtered['Current Price'].quantile(0.10)
-            print(f"\nAutomatic Accessory Filter:")
-            print(f"No massive price gap detected. Using basic 10th percentile floor: Rs. {automatic_price_floor:,.2f}")
+    if len(df_sorted_by_sim) < top_n:
+        top_relevant_items = df_sorted_by_sim
     else:
-        if unique_prices:
-            automatic_price_floor = unique_prices[0] * 0.5
+        top_relevant_items = df_sorted_by_sim.head(top_n)
+        
+    anchor_price = top_relevant_items['Current Price'].median()
+    
+    # Establish floor at 20% of the anchor price. This mathematically purges cheap accessories
+    # while allowing massive (up to 80%) real discounts to pass through.
+    automatic_price_floor = anchor_price * 0.20
+    
+    print(f"\nAutomatic Accessory Filter (Top-Relevance):")
+    print(f"Detected Anchor Price: Rs. {anchor_price:,.2f}")
+    print(f"Established Price Floor: Rs. {automatic_price_floor:,.2f} (20% of Anchor)")
     
     pre_floor_count = len(df_keyword_filtered)
     df_fully_filtered = df_keyword_filtered[df_keyword_filtered['Current Price'] >= automatic_price_floor].copy()

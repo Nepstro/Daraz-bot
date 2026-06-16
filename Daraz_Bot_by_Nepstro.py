@@ -339,8 +339,8 @@ def analyze_data(listings, config):
         
     df['Similarity'] = df['Title_Lower'].apply(calculate_similarity)
     
-    # Require at least one keyword or high similarity
-    df_keyword_filtered = df[df['Title_Lower'].apply(lambda title: any(kw in title for kw in keywords)) | (df['Similarity'] > 0.4)].copy()
+    # Require ALL keywords to match strictly OR high fuzzy similarity
+    df_keyword_filtered = df[df['Title_Lower'].apply(lambda title: all(kw in title for kw in keywords)) | (df['Similarity'] > 0.45)].copy()
     
     print(f"\nKeyword/Fuzzy filter applied: Retained {len(df_keyword_filtered)} of {len(df)} items related to '{search_query}'.")
 
@@ -350,15 +350,23 @@ def analyze_data(listings, config):
         'rack', 'basket', 'cover', 'case', 'liner', 'tray', 'accessories', 'accessory',
         'parts', 'replacement', 'silicone', 'paper', 'film', 'sticker', 'glass',
         'shell', 'tools', 'cleaning', 'protector', 'tempered', 'bracket', 
-        'skewer', 'dehydrator', 'mold', 'spare', 'cable', 'charger', 'adapter'
+        'skewer', 'dehydrator', 'mold', 'spare', 'cable', 'charger', 'adapter',
+        'makeup', 'powder', 'concealer', 'foundation', 'repair', 'earmuff'
     ]
+    
+    # Expand list with simple plurals for robustness
+    expanded_neg_keywords = set()
+    for nkw in negative_keywords:
+        expanded_neg_keywords.add(nkw)
+        if not nkw.endswith('s'):
+            expanded_neg_keywords.add(nkw + 's')
     
     def is_accessory(title):
         t_lower = title.lower()
         search_lower = search_query.lower()
         return any(
-            (f" {nkw} " in f" {t_lower} ") # Match as whole words to avoid partial matching
-            for nkw in negative_keywords 
+            re.search(r'\b' + re.escape(nkw) + r'\b', t_lower)
+            for nkw in expanded_neg_keywords 
             if nkw not in search_lower
         )
         

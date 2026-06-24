@@ -487,7 +487,7 @@ def build_html_table(df, config, highlight_identifiers=set()):
     return table_html
 
 def generate_report(df_to_report, current_anomalies, median_price, config):
-    """Generates a self-contained HTML report with historical and new alerts."""
+    """Generates a self-contained HTML reports with historical and new alerts."""
     search_query = config['search_query']
     df_sorted = df_to_report.sort_values(by="Current Price", ascending=True).reset_index(drop=True)
 

@@ -1,6 +1,6 @@
 @echo off
 echo ==================================================
-echo  Daraz Bot by Nepstro - Setup & Launch
+echo  Daraz Bot by Nepstro - Setup and Launch
 echo ==================================================
 
 REM Check if pip is installed

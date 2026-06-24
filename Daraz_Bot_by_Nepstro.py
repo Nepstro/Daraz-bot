@@ -492,7 +492,12 @@ def generate_report(df_to_report, current_anomalies, median_price, config):
     df_sorted = df_to_report.sort_values(by="Current Price", ascending=True).reset_index(drop=True)
 
     # --- Generate a unique filename to avoid overwriting previous reports ---
-    base_out_file = f"daraz_{search_query.lower().replace(' ', '_')}_deep.html"
+    reports_dir = "reports"
+    if not os.path.exists(reports_dir):
+        os.makedirs(reports_dir)
+        
+    base_filename = f"daraz_{search_query.lower().replace(' ', '_')}_deep.html"
+    base_out_file = os.path.join(reports_dir, base_filename)
     out_file = base_out_file
     counter = 1
     # If the file exists, find a new name like '..._1.html', '..._2.html'

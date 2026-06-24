@@ -12,7 +12,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from difflib import SequenceMatcher
 
 # --- Static Global Settings ---
-MAX_PAGES_TO_CRAWL = 10
+MAX_PAGES_TO_CRAWL = 15
 MIN_RELEVANCE_RATIO = 0.20
 Z_SCORE_THRESHOLD = -3.0
 ALERT_LOG_FILE = "triggered_glitches_log.csv"

@@ -16,6 +16,7 @@ env/
 # Generated files
 *.html
 *.csv
+reports/
 
 # IDE / Editor specific
 .vscode/

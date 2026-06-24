@@ -50,8 +50,8 @@ def display_header():
     print("="*120)
     print("\n")
 
-def spinner_sleep(duration, message=""):
-    """Displays a CLI spinner for a given duration."""
+def spinner_sleep(duration, message="", condition_func=None, driver=None):
+    """Displays a CLI spinner for a given duration or until a condition is met."""
     keyframes = [
         "_______", "______🚚", "_____🚚_", "____🚚__",
         "___🚚__", "__🚚___", "_🚚____", "🚚_____",
@@ -75,7 +75,16 @@ def spinner_sleep(duration, message=""):
         "Looking for listings where the discount is higher than the price... 💸",
     ]
     funny_message = random.choice(daraz_phrases)
+    success = False
     while time.time() - start_time < duration:
+        if condition_func and driver:
+            try:
+                if condition_func(driver):
+                    success = True
+                    break
+            except Exception:
+                pass
+                
         frame = keyframes[i % len(keyframes)]
         display_message = f"{message} ({funny_message})"
         sys.stdout.write(f'\r{frame} {display_message}')
@@ -85,6 +94,9 @@ def spinner_sleep(duration, message=""):
     # Clear the line with plenty of space
     sys.stdout.write('\r' + ' ' * 120 + '\r')
     sys.stdout.flush()
+    
+    if condition_func and driver and not success:
+        raise TimeoutException(f"Timed out after {duration} seconds waiting for condition.")
 
 def is_new_alert_csv(title, price):
     """Checks if a given alert already exists in the persistent CSV log."""
@@ -301,16 +313,17 @@ def scrape_all_pages(driver, search_query):
                 # The click event is often attached to this container rather than the inner <a> or <svg>.
                 next_button = driver.find_element("css selector", ".ant-pagination-next:not(.ant-pagination-disabled)")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
-                spinner_sleep(1, "Preparing for next page...")
                 next_button.click()
                 
                 next_page_num = current_page + 1
                 # --- Robust Page Transition Wait ---
                 # Reverting to a URL-based wait, as it's more reliable than checking DOM state.
                 # It waits for the '&page=' parameter in the URL to update.
-                print(f"Navigating to page {next_page_num}...")
-                WebDriverWait(driver, 15).until(
-                    lambda d: f"page={next_page_num}" in d.current_url
+                spinner_sleep(
+                    duration=15, 
+                    message=f"Navigating to page {next_page_num}...", 
+                    condition_func=lambda d: f"page={next_page_num}" in d.current_url,
+                    driver=driver
                 )
                 current_page = next_page_num
             except (TimeoutException, NoSuchElementException):

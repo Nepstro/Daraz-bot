@@ -181,7 +181,32 @@ def scrape_all_pages(driver, search_query):
         relevant_count = 0
         search_keywords = [kw.lower() for kw in search_query.split() if kw.isalnum()]
 
+        keyframes = [
+            "_______", "______🚚", "_____🚚_", "____🚚__",
+            "___🚚__", "__🚚___", "_🚚____", "🚚_____",
+        ]
+        daraz_phrases = [
+            "Bargaining with sellers... 🤝",
+            "Dodging flash sales... 🏃‍♂️💨",
+            "Counting delivery bikes... 🏍️",
+            "Looking for 'Machan' deals... 👀",
+            "Checking if it's 'original'... 🤔",
+            "Convincing the delivery guy it's prepaid... 😅",
+            "Adding to cart... then closing the tab. 🙈",
+            "Waiting for the OTP that never comes... ⏳",
+            "Filtering out the 'for cover' listings... 🕵️‍♀️",
+            "Checking if a missing zero made a laptop Rs. 1,500... 🤯",
+            "Scanning for decimal point placement disasters... 🧐",
+        ]
+        funny_message = random.choice(daraz_phrases)
+
         for i in range(num_items):
+            # Print spinner during extraction
+            frame = keyframes[i % len(keyframes)]
+            display_message = f"Extracting item {i+1}/{num_items}... ({funny_message})"
+            sys.stdout.write(f'\r{frame} {display_message}')
+            sys.stdout.flush()
+            
             try:
                 # Re-find the item on each iteration to prevent StaleElementReferenceException
                 item = driver.find_elements("css selector", "div[data-qa-locator='product-item']")[i]
@@ -298,6 +323,10 @@ def scrape_all_pages(driver, search_query):
                 # This item might be an ad or have a different structure. Skip it.
                 continue
 
+        # Clear the line after loop
+        sys.stdout.write('\r' + ' ' * 120 + '\r')
+        sys.stdout.flush()
+
         print(f"Successfully compiled {page_items_parsed} product listings from page {current_page}.")
         
         if page_items_parsed > 0:
@@ -313,6 +342,7 @@ def scrape_all_pages(driver, search_query):
                 # The click event is often attached to this container rather than the inner <a> or <svg>.
                 next_button = driver.find_element("css selector", ".ant-pagination-next:not(.ant-pagination-disabled)")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
+                spinner_sleep(1.5, "Preparing for next page...")
                 next_button.click()
                 
                 next_page_num = current_page + 1
